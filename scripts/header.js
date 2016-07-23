@@ -13,32 +13,8 @@
   // Render the station map first, then load the train data and start animating trains
   VIZ.requiresData([
     // nodes and links that comprise the subway system network
-    'json!data/station-network.json',
-    // hard-coded positions for each station on the map glyph
-    'json!data/spider.json',
-  ], true).done(function (network, spider) {
-    // pre-process the data
-    var idToNode = {}, idToLine = {}, trips;
-    network.nodes.forEach(function (data) {
-      data.x = spider[data.id][0];
-      data.y = spider[data.id][1];
-      idToNode[data.id] = data;
-    });
-    network.links.forEach(function (link) {
-      link.source = network.nodes[link.source];
-      link.target = network.nodes[link.target];
-      link.source.links = link.source.links || [];
-      link.target.links = link.target.links || [];
-      link.target.links.splice(0, 0, link);
-      link.source.links.splice(0, 0, link);
-      idToLine[link.source.id + '|' + link.target.id] = link.line;
-      idToLine[link.target.id + '|' + link.source.id] = link.line;
-    });
-
-    // watch height to adjust visualization after loading data
-    VIZ.watchSize(function () {
-      drawMap(svg, $('.container').width() / 4, $('.container').width() / 4);
-    });
+    'json!data/station-network.json'
+  ], true).done(function (network) {
 
 
     // return the center location for a train given the two stations it is between and
@@ -62,7 +38,6 @@
     VIZ.requiresData([
       'json!data/marey-trips.json'
     ]).done(function (data) {
-      trips = data;
       // and start rendering it - 1 minute = 1 second
       renderTrainsAtTime(lastTime, true);
       (function animate() {
@@ -70,50 +45,6 @@
         setTimeout(animate, 1000 / PER_SECOND);
       }());
     });
-
-    // Render the dots for each train at a particular point in time
-    var lastTime = minUnixSeconds;
-    function renderTrainsAtTime(unixSeconds, now) {
-      var duration = now ? 0 : (1000 / PER_SECOND);
-      if (!unixSeconds) { unixSeconds = lastTime; }
-      lastTime = unixSeconds;
-      var active = trips.filter(function (d) {
-        return d.begin < unixSeconds && d.end > unixSeconds;
-      });
-      var positions = active.map(function (d) {
-        // get prev, next stop and mix
-        for (var i = 0; i < d.stops.length - 1; i++) {
-          if (d.stops[i + 1].time > unixSeconds) {
-            break;
-          }
-        }
-        var from = d.stops[i];
-        var to = d.stops[i + 1];
-        var ratio = (unixSeconds - from.time) / (to.time - from.time);
-        return {trip: d.trip, pos: placeWithOffset(from, to, ratio), line: d.line};
-      });
-
-      var trains = svg.select('.map-container').selectAll('.train').data(positions, function (d) { return d.trip; });
-      if (now) {
-        trains.transition().duration(0)
-            .attr('cx', function (d) { return d.pos[0]; })
-            .attr('cy', function (d) { return d.pos[1]; });
-      } else {
-        trains.transition().duration(duration).ease('linear')
-            .attr('cx', function (d) { return d.pos[0]; })
-            .attr('cy', function (d) { return d.pos[1]; });
-      }
-      trains.enter().append('circle')
-          .attr('class', function (d) { return 'train ' + d.line; })
-          .attr('r', radius)
-          .attr('cx', function (d) { return d.pos[0]; })
-          .attr('cy', function (d) { return d.pos[1]; });
-      trains.exit().remove();
-      if (unixSeconds) { svg.select('.time-display').text(function () {
-        var t = moment(unixSeconds * 1000).zone(5);
-        return t.format('dddd M/D h:mm a');
-      }); }
-    }
 
     // render the map given a particular width and height that it needs to fit into
     function drawMap(svgContainer, outerWidth, outerHeight) {
